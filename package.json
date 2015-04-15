@@ -1,0 +1,28 @@
+{
+  "name": "aural",
+  "version": "0.0.1",
+  "description": "aural gps-located music tracks",
+  "author": "Richard Mueller",
+  "main": "Gruntfile.js",
+  "dependencies": {
+    "nodejs-websocket": "^1.2.0",
+    "strongloop": "^2.10.1"
+  },
+  "devDependencies": {
+    "grunt": "~0.4.1",
+    "grunt-browser-sync": "~0.2.3",
+    "grunt-contrib-compass": "~0.8.0",
+    "grunt-contrib-watch": "~0.5.3",
+    "grunt-contrib-uglify": "~0.2.4",
+    "grunt-contrib-cssmin": "~0.6.2",
+    "grunt-contrib-copy": "~0.4.1",
+    "grunt-text-replace": "~0.3.8",
+    "grunt-contrib-clean": "~0.5.0",
+    "grunt-ftp-deploy": "~0.0.10",
+    "grunt-sftp-deploy": "~0.1.0",
+    "matchdep": "~0.3.0"
+  },
+  "engines": {
+    "node": ">= 0.10.x"
+  }
+}
