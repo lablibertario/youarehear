@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "sources": [
+      "loopback/common/models",
+      "loopback/server/models",
+      "../common/models",
+      "./models"
+    ]
+  },
+  "User": {
+    "dataSource": "db"
+  },
+  "AccessToken": {
+    "dataSource": "db",
+    "public": false
+  },
+  "ACL": {
+    "dataSource": "db",
+    "public": false
+  },
+  "RoleMapping": {
+    "dataSource": "db",
+    "public": false
+  },
+  "Role": {
+    "dataSource": "db",
+    "public": false
+  },
+  "point": {
+    "dataSource": "youarehear",
+    "public": true
+  },
+  "album": {
+    "dataSource": "youarehear",
+    "public": true
+  },
+  "medley": {
+    "dataSource": "youarehear",
+    "public": true
+  },
+  "song": {
+    "dataSource": "youarehear",
+    "public": true
+  },
+  "track": {
+    "dataSource": "youarehear",
+    "public": true
+  }
+}
