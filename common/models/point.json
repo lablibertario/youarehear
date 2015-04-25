@@ -1,0 +1,68 @@
+{
+  "name": "point",
+  "plural": "points",
+  "base": "PersistedModel",
+  "strict": false,
+  "idInjection": true,
+  "options": {
+  	"mysql": {
+   		"table": "points"
+ 	}
+  },
+  "properties": {
+    "id": {
+      "type": "number",
+      "id": true,
+      "required": false,
+      "index": true
+    },
+    "lat": {
+      "type": "number",
+      "id": false,
+      "required": true
+    },
+    "lng": {
+      "type": "number",
+      "id": false,
+      "required": true
+    },
+    "accuracy": {
+      "type": "number"
+    },
+    "date": {
+      "type": "date",
+      "required": false
+    },
+    "socket_address": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "trackId": {
+      "type": "number",
+      "required": true
+    },
+    "latlng": {
+      "type": "GeoPoint",
+      "required": false
+    },
+    "song_number": {
+      "type": "number",
+      "required": false
+    },
+    "track_number": {
+      "type": "number",
+      "required": false
+    }
+  },
+  "validations": [],
+  "relations": {
+    "track": {
+      "type": "belongsTo",
+      "model": "track"
+    }
+  },
+  "acls": [],
+  "methods": []
+}

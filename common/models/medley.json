@@ -1,0 +1,42 @@
+{
+  "name": "medley",
+  "plural": "medleys",
+  "base": "PersistedModel",
+  "strict": false,
+  "idInjection": true,
+  "options": {
+  	"mysql": {
+   		"table": "medleys"
+ 	}
+  },
+  "properties": {
+    "id": {
+      "type": "number",
+      "id": true,
+      "required": false,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "albumId": {
+      "type": "number",
+      "required": true
+    }
+  },
+  "validations": [],
+  "relations": {
+    "songs": {
+      "type": "hasMany",
+      "model": "song"
+    },
+    "album": {
+      "type": "belongsTo",
+      "model": "album",
+      "foreignKey": "albumId"
+    }
+  },
+  "acls": [],
+  "methods": []
+}

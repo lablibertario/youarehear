@@ -1,0 +1,41 @@
+{
+  "name": "song",
+  "plural": "songs",
+  "base": "PersistedModel",
+  "strict": false,
+  "idInjection": true,
+  "options": {
+  	"mysql": {
+   		"table": "songs"
+ 	}
+  },
+  "properties": {
+    "id": {
+      "type": "number",
+      "id": true,
+      "required": false,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "medleyId": {
+      "type": "number",
+      "required": true
+    }
+  },
+  "validations": [],
+  "relations": {
+    "tracks": {
+      "type": "hasMany",
+      "model": "track"
+    },
+    "medley": {
+      "type": "belongsTo",
+      "model": "medley"
+    }
+  },
+  "acls": [],
+  "methods": []
+}

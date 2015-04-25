@@ -1,0 +1,41 @@
+{
+  "name": "track",
+  "plural": "tracks",
+  "base": "PersistedModel",
+  "strict": false,
+  "idInjection": true,
+  "options": {
+  	"mysql": {
+   		"table": "tracks"
+ 	}
+  },
+  "properties": {
+    "id": {
+      "type": "number",
+      "id": true,
+      "required": false,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "songId": {
+      "type": "number",
+      "required": true
+    },
+    "rgb": {
+      "type": "string",
+      "required": false
+    }
+  },
+  "validations": [],
+  "relations": {
+    "song": {
+      "type": "belongsTo",
+      "model": "song"
+    }
+  },
+  "acls": [],
+  "methods": []
+}

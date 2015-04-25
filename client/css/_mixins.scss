@@ -1,0 +1,93 @@
+/*
+MIXINS
+*/
+@mixin border-radius($radius) {
+	border-radius: $radius;
+	-webkit-border-radius: $radius;
+	-moz-border-radius: $radius;
+	-o-border-radius: $radius;
+}
+@mixin border-radius-bottom($radius) {
+	-webkit-border-bottom-right-radius: $radius;
+	-webkit-border-bottom-left-radius: $radius;
+	-moz-border-radius-bottomright: $radius;
+	-moz-border-radius-bottomleft: $radius;
+	border-bottom-right-radius: $radius;
+	border-bottom-left-radius: $radius;
+}
+
+
+@mixin opacity($opacity) {
+	opacity: $opacity;
+	-webkit-opacity: $opacity;
+	-moz-opacity: $opacity;
+	-o-opacity: $opacity;
+}
+
+@mixin text-shadow($x, $y, $blur, $color) {
+	text-shadow: $x $y $blur $color;
+}
+
+@mixin box-shadow($args) {
+	-webkit-box-shadow: $args;
+	-moz-box-shadow: $args;
+	box-shadow: $args;
+}
+@mixin box-shadow-multi($arg1, $arg2, $arg3, $arg4) {
+	-webkit-box-shadow: $arg1, $arg2, $arg3, $arg4;
+	-moz-box-shadow: $arg1, $arg2, $arg3, $arg4;
+	box-shadow: $arg1, $arg2, $arg3, $arg4;
+}
+
+@mixin image-blur($amount) {
+	filter: blur($amount + px);
+	-webkit-filter: blur($amount + px);
+	-moz-filter: blur($amount + px);
+	-o-filter: blur($amount + px);
+	-ms-filter: blur($amount + px);
+	filter: url(blur.svg#blur);
+	filter:progid:DXImageTransform.Microsoft.Blur(PixelRadius='{$amount}');
+}
+
+@mixin breakpoint($breakpoint) {
+    @media only screen and (max-width: $breakpoint) { @content; }
+}
+
+@mixin animatePrompt($animation, $speed) {
+	-webkit-transition: all $speed ease-in-out; -moz-transition: all $speed ease-in-out; -o-transition: all $speed ease-in-out; -ms-transition: all $speed ease-in-out; transition: all $speed ease-in-out;
+	-webkit-animation-direction: normal; -webkit-animation-duration: $speed; -webkit-animation-iteration-count: 1; -webkit-animation-name: $animation; -webkit-animation-timing-function: ease-in-out;
+	-moz-animation-direction: normal; -moz-animation-duration: $speed; -moz-animation-iteration-count: 1; -moz-animation-name: $animation; -moz-animation-timing-function: ease-in-out;
+}
+
+
+
+
+
+
+
+
+
+@mixin perspective($t) {
+	-webkit-perspective: $t; -moz-perspective: $t; -o-perspective: $t; perspective: $t;
+}
+
+@mixin backface-visibility($t) {
+	-webkit-backface-visibility: $t; -moz-backface-visibility: $t; -o-backface-visibility: $t; backface-visibility: $t;
+}
+
+@mixin transform($t) {
+	-webkit-transform: $t; -moz-transform: $t; -o-transform: $t; transform: $t;
+}
+
+@mixin transform-origin($t) {
+	-webkit-transform-origin: $t; -moz-transform-origin: $t; -o-transform-origin: $t; transform-origin: $t;
+}
+
+@mixin transform-style($t) {
+	-webkit-transform-style: $t; -moz-transform-style: $t; -o-transform-style: $t; transform-style: $t;
+}
+
+
+
+
+
