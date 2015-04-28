@@ -41,78 +41,79 @@ visualizations: bump in time to the music
 *************************************************************************************** */
 
 
-
 !function ($, window) {
 
-	"use strict";
+    "use strict";
 
 //----------------------------------------------------------------------
 // Class Definition
 //----------------------------------------------------------------------
-	
-	var view = function (element, options) {
-		this.$window 			= $(window);
-		this.$body 				= $('body');
-		this.$document 			= $(document);	
-		this.options 			= options;
+    
+    var view = function (element, options) {
+        this.$window            = $(window);
+        this.$body              = $('body');
+        this.$document          = $(document);  
+        this.options            = options;
 
-		this.vw 				= this.getViewport()[0]; // viewport width
-		this.vh 				= this.getViewport()[1]; // viewport height
+        this.vw                 = this.getViewport()[0]; // viewport width
+        this.vh                 = this.getViewport()[1]; // viewport height
 
-		this.TABLET_LANDSCAPE 	= 1024;
-		this.TABLET_PORTRAIT 	= 768;
-		this.MOBILE_LANDSCAPE 	= 560;
-		this.MOBILE_PORTRAIT 	= 320;
+        this.TABLET_LANDSCAPE   = 1024;
+        this.TABLET_PORTRAIT    = 768;
+        this.MOBILE_LANDSCAPE   = 560;
+        this.MOBILE_PORTRAIT    = 320;
 
-		this.isMobile 			= this.vw <= this.TABLET_LANDSCAPE && !!('ontouchstart' in window);
-		this.isLoaded 			= false;
+        this.isMobile           = this.vw <= this.TABLET_LANDSCAPE && !!('ontouchstart' in window);
+        this.isLoaded           = false;
 
-
-
-
-		// trap console log errors in IE
-		if (typeof console == "undefined") { window.console = { log: function () {} }; }
+        this.SECOND             = 1000;
+        this.MOMENT             = 3000;
+        this.MINUTE             = 10000;
 
 
 
-		if (typeof google !== 'undefined') {
 
-			this.whirlymap 				= true;
-
-			var url = window.location.href;
-			this.url = url.substring(0, url.lastIndexOf(':'))
+        // trap console log errors in IE
+        if (typeof console == "undefined") { window.console = { log: function () {} }; }
 
 
-			this.points 				= [];
+
+        if (typeof google !== 'undefined') {
+
+
+            this.viewMap                = true; $('#cube').hide();
+
+            var url = window.location.href;
+            this.url = url.substring(0, url.lastIndexOf(':'))
+
+
+            this.points                 = [];
             this.pointsByDistance       = [];
-			this.new_points 			= [];
-            this.resetPoints = true;
+            this.new_points             = [];
+
             this.isTimeAnchorReset      = false;
 
-			this.meters_to_degrees 		= .000007871; // for 45ºN, multiplier = 1m
-			//this.meters_to_degrees 		= .00001; // for 45ºN, multiplier = 1m
+            this.meters_to_degrees      = .000007871; // for 45ºN, multiplier = 1m
+            //this.meters_to_degrees        = .00001; // for 45ºN, multiplier = 1m
 
 
-			this.MAXIMUM_TRACKS_PLAYABLE= this.isMobile ? 6 : 12;
-			this.MAXIMUM_POINTS_VISIBLE = this.isMobile ? 50 : 150;
-			this.medleyId 				= 1;
+            this.MAXIMUM_TRACKS_PLAYABLE= this.isMobile ? 8 : 14;
+            this.MAXIMUM_POINTS_VISIBLE = this.isMobile ? 50 : 150;
+            this.medleyId               = 1;
             // this.gps_delta              = 0;
-			this.universal_time 		= new Date().getTime() / 1000;
-			this.medley_offset 			= 0;
-			this.medley_length 			= 3 * 60; // medley is three minutes long
+            this.universal_time         = new Date().getTime() / 1000;
+            this.medley_offset          = 0;
+            this.medley_length          = 3 * 60; // medley is three minutes long
 
-			this.audio 					= [];
-			this.audio_buffers 			= [];
-
-            this.test_play_array        = [];
-            this.test_stop_array        = [];
+            this.audio                  = [];
+            this.audio_buffer           = [];
+            this.oneoff_buffers         = [];
 
             this.soundboard             = [];
             this.stingers               = [];
 
-			this.isGetPointsReady 		= false;
 
-			this.sockets 				= [];
+            this.sockets                = [];
 
 
             this.useGPS                 = true; // set this to false to turn off all GPS processing and default to initial_latlng
@@ -175,7 +176,6 @@ visualizations: bump in time to the music
     view.prototype = {
 
         constructor: view,
-
 
 
 //----------------------------------------------------------------------
@@ -1096,7 +1096,6 @@ visualizations: bump in time to the music
         geoLocate: function () {
             if (navigator.geolocation && this.useGPS) {
                 var self = this;
-                self.geolocateErrorCounter = 0;
                 navigator.geolocation.getCurrentPosition(
                     function() { // callback function to set a timer
                         self.isLocated = true;
