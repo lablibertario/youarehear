@@ -11,6 +11,7 @@ Here are the beta comments from yesterday-
 
 
 Don't have all tracks restart at once for GPS time offset fixes, space them out a bit so it's not as obvious -- schedule them every 10ms
+Time offsets seem to have some issues coming back from sleep on the phone -- they're off but they don't appear to know it.
 
 
 facebook & twitter default tweets (with GPS location? Then we need a 'go to my location' button too )
@@ -85,7 +86,6 @@ visualizations: bump in time to the music
         if (typeof google !== 'undefined') {
 
 
-            this.viewMap                = true; $('#cube').hide();
 
             var url = window.location.href;
             this.url = url.substring(0, url.lastIndexOf(':'))
@@ -107,6 +107,7 @@ visualizations: bump in time to the music
             // this.gps_delta              = 0;
             this.universal_time         = new Date().getTime() / 1000;
             this.medley_offset          = 0;
+            // this.medley_length          = 20; // medley is twenty seconds long
             this.medley_length          = 3 * 60; // medley is three minutes long
 
             this.audio                  = [];
@@ -120,9 +121,12 @@ visualizations: bump in time to the music
             this.sockets                = [];
 
 
-            this.useGPS                 = true; // set this to false to turn off all GPS processing and default to initial_latlng
+            this.useGPS                 = true; // set this to true to use current GPS location; if there isn't one, then use initial_latlng
             // this.useGPS                 = false; // set this to false to turn off all GPS processing and default to initial_latlng
-            this.initial_latlng         = [44.978584, -93.256087];
+            this.initial_latlng         = [44.978584, -93.256087]; // Chicago Mall
+            this.initial_latlng         = [44.972208, -93.275697]; // Peavey Plaza
+
+            this.geolocateErrorCounter  = 0;
 
             // check location hash for a search parameter.
             var ls = location.hash;
@@ -162,14 +166,13 @@ visualizations: bump in time to the music
             this.current_pitch          = 0;
 
             this.visualizations         = [];
-            this.trackId                = 1;
 
             this.latlngbounds           = new google.maps.LatLngBounds(); // This lets us zoom the map to fit our markers
 
             google.maps.event.addDomListener(window, 'load', $.proxy(this.init, this));
 
 
-            //if (this.isMobile) console.log = this.log;
+            // if (this.isMobile) console.log = this.log;
 
 
         } else {
@@ -200,9 +203,6 @@ visualizations: bump in time to the music
         init: function () {
             var self = this;
 
-            self.geoLocate();
-
-
             $(function() { FastClick.attach(document.body); });
 
             $('#loading').height(this.vh);
@@ -212,11 +212,9 @@ visualizations: bump in time to the music
                 self.$visualizations    = $('#visualizations');
                 self.album = album[0];
 
-
                 self._initListeners();
                 self._initMap();
                 self._initAudio();
-                self.resize();
                 self._initSockets();
                 self._initOneoffs();
 
@@ -224,115 +222,6 @@ visualizations: bump in time to the music
 
 
         },
-
-        _initOneoffs: function() {
-
-            var self = this;
-
-            // preload soundboard
-            self.soundboard[0] = '/albums/Northern Spark/soundboard/1-COWBELL.mp3';
-            self.soundboard[1] = '/albums/Northern Spark/soundboard/2-CLAP.mp3';
-            self.soundboard[2] = '/albums/Northern Spark/soundboard/3-WOW.mp3';
-            self.soundboard[3] = '/albums/Northern Spark/soundboard/4-CYMBAL.mp3';
-            self.soundboard[4] = '/albums/Northern Spark/soundboard/5-SFX.mp3';
-            self.soundboard[5] = '/albums/Northern Spark/soundboard/6-DJ SIREN.mp3';
-
-            for (var i in self.soundboard) {
-                // console.log(self.soundboard[i])
-                self.oneOff({ url: self.soundboard[i], preloadOnly: true });
-                var a = $('<a data-soundid="'+ i +'">'+ i +'</div>').click($.proxy(handleSoundboard, self));
-                $('#soundboard').append(a);
-            }
-
-
-            // preload soundboard
-            self.stingers[0] = '/albums/Northern Spark/stingers/01.mp3';
-            self.stingers[1] = '/albums/Northern Spark/stingers/02.mp3';
-
-            for (var i in self.stingers) {
-                self.oneOff({ url: self.stingers[i], preloadOnly: true });
-            }
-
-            // when stinger is loaded, finish up the load when initial stinger is preloaded.
-            self.oneOff({
-                url: '/albums/Northern Spark/stingers/01.mp3',
-                callback: function() {
-                    self.doFinalLoad();
-                },
-                preloadOnly: true
-            });
-
-        },
-
-
-
-        _playBuffer: function(stinger, lat, lng) {
-            // stop it first
-            // console.log('_playBuffer', stinger, lat, lng)
-            if (stinger) if (stinger.source) if (stinger.isPlaying) if (stinger.source.noteOff) stinger.source.noteOff(0); else stinger.source.stop(0);
-            
-
-            //if (typeof stinger.buffer == 'AudioBuffer') {
-                lat = lat || this.lat;
-                lng = lng || this.lng;
-
-                // create a new disposable one-off
-                stinger.source = this.context.createBufferSource(); 
-                stinger.source.buffer = stinger.buffer;
-
-
-
-                stinger.panner = this.context.createPanner();
-                stinger.panner.refDistance = .00008;
-                stinger.panner.rolloffFactor = 10;
-                stinger.panner.setPosition(lat, lng, 0);
-                stinger.panner.connect(this.context.destination);
-                stinger.source.connect(stinger.panner);
-           
-
-
-                stinger.isPlaying = true;
-                if (stinger.source.noteOn) stinger.source.noteOn(0); else stinger.source.start(0);
-                // TODO: make isPlaying go off after buffer.duration
-
-                return stinger;
-
-            //} else return null;
-        },
-
-
-
-        oneOff: function(arg, lat, lng) {
-            var self = this;
-            //console.log('oneOff ', arg.url, lat, lng)
-            if (self.oneoff_buffers[arg.url]) {
-                // we've played this one before, we've stored a buffer
-                if (!arg.preloadOnly) self.oneoff_buffers[arg.url] = self._playBuffer(self.oneoff_buffers[arg.url], lat, lng);
-                if (arg.callback) if (typeof arg.callback == 'function') arg.callback();
-
-            } else {
-                // we haven't played this one yet, have to load it first.
-                self.oneoff_buffers[arg.url] = { id:123, track_url: arg.url };
-                var stingerLoader = new AudioLoader (
-                    self.context,
-                    self.oneoff_buffers[arg.url],
-                    function (buffer, pointId) {
-                        var tmpaud = {};
-                        tmpaud.buffer = buffer;
-                        self.oneoff_buffers[arg.url] = tmpaud;
-
-                        if (!arg.preloadOnly) self.oneoff_buffers[arg.url] = self._playBuffer(self.oneoff_buffers[arg.url], lat, lng);
-                        if (typeof arg.callback == 'function') arg.callback();
-                    }
-                );
-                stingerLoader.load();
-            }
-
-        },
-
-
-
-
 
         _initListeners: function () {
             this.$window.on('resize', $.proxy(handleResize, this));
@@ -345,13 +234,13 @@ visualizations: bump in time to the music
 
 
 
-        doFinalLoad: function () {
+        displayStartButton: function () {
+            // called from _initOneoffs() when the initial stinger is done loading
             this.resize(); // make sure everything lines up nice
-            this.finalLoad = true;
 
             var self = this;
 
-            $('#loading button').click(function() { self.doFinalFinalLoad(); });
+            $('#loading button').click(function() { self.startButtonClick(); });
             $('#loading #init').hide();
 
             var start = $('#loading #splash button');
@@ -362,13 +251,16 @@ visualizations: bump in time to the music
 
         },
 
-        doFinalFinalLoad: function () {
+        startButtonClick: function () {
             var self = this;
 
             this.$arrow.fadeIn();
 
             // initial stinger
             self.oneOff({url: '/albums/Northern Spark/stingers/01.mp3', callback: function() {
+
+                self.geoLocate();
+
                 self._secondTick();
                 self._getTime();
                 // set off tick timers
@@ -382,144 +274,12 @@ visualizations: bump in time to the music
                     self._minuteTick();
                 }, self.MINUTE);
 
+                $('#loading').fadeOut();
+                self.isLoaded = true; // let the app know things are done
+
             } });
 
             
-
-            
-
-            $('#loading').fadeOut();
-            this.isLoaded = true; // let the app know things are done
-        },
-
-
-
-
-
-
-
-
-
-
-/*  ################################################################################################
-    WEBSOCKETS
-    ################################################################################################
-*/
-
-
-        _initSockets: function() {
-            var self = this;
-            this.socket = io.connect(this.url + ':3001');
-            this.socket.on('error', function() { console.error(arguments) });
-            this.socket.on('message', function(data) {
-                console.log('message response:', data);
-                // self.setTimeAnchor(data.server_time);
-            });
-            this.socket.on('pong', function(data) {
-                if (data && self.point)
-                if (self.points[data.id] && data.id != self.point.id) {
-                    // var d = new Date()
-                    // console.log('pong', data.server_time, d.getTime(), data.server_time - d.getTime())
-                    // self.setTimeAnchor(data.server_time);
-                    self.points[data.id].marker.setPosition( new google.maps.LatLng (data.lat, data.lng) );
-                }
-            });
-            this.socket.on('song', function(data) {
-                self.oneOff({ url: data.url }, data.lat, data.lng);
-            });
-        },
-
-
-        _addSocket: function(socketid) {
-            //console.log('_addSocket', socketid);
-            this.sockets[socketid] = socketid;
-            this.socket.emit('join', socketid);
-        },
-
-
-        _removeSocket: function(socketid) {
-            // console.log('_removeSocket', socketid);
-            if (this.sockets[socketid]) delete this.sockets[socketid];
-        },
-
-
-        _uploadPositionSuccess: function(result) {
-            var self = this;
-            var point = result;
-
-            self.point = point;
-            self.point.name = self.point.id;
-
-            // play my own emissions!
-            if (self.point) if ($.inArray(self.point.id, self.sockets) < 0) { self._addSocket(self.point.id); }
-            
-        },
-
-        _uploadPosition: function () {
-            if (this.isLocated == true) {
-                var self = this;
-                var posturl = '/api/v1/points';
-
-                if (this.socket) {
-
-                    if (this.point) {
-                        // update
-
-                        var upd_posturl = posturl +  '/' + this.point.id;
-
-                        var point = {
-                            id: this.point.id,
-                            lat: this.lat,
-                            lng: this.lng,
-                            latlng: {lat:this.lat, lng: this.lng},
-                            accuracy: this.accuracyInMeters,
-                            name: this.point.id
-                        }
-
-                        // heartbeat for server
-                        if (this.point.date) {
-                            var d = new Date(this.point.date);
-                            var sec = d.getSeconds();
-                            d.setSeconds(sec + (self.MOMENT / 1000))
-                            if (sec >= 58) {
-                                d.setSeconds(0); d.setMinutes(d.getMinutes() + 1);
-                            }
-
-                            point.date = d;
-                        }
-
-                        $.ajax({
-                            type: 'PUT',
-                            url: upd_posturl,
-                            data: point,
-                            success: $.proxy(self._uploadPositionSuccess, self),
-                            error: function() { self._addMyPoint(posturl); /* if it 404s try just updating the existing point instead, it may have gotten deleted */ }
-                        });
-
-                    } else {
-                        // add
-                        this._addMyPoint(posturl);
-
-                    }
-                }
-            }
-
-        },
-
-
-        _addMyPoint: function(posturl) {
-            // add
-            var self = this;    
-            var point = {
-                trackId: this.trackId,
-                lat: this.lat,
-                lng: this.lng,
-                latlng: {lat:this.lat, lng: this.lng},
-                accuracy: this.accuracyInMeters,
-                name: this.point ? this.point.id : 'person'
-            };
-            $.post(posturl, point, $.proxy(self._uploadPositionSuccess, self));
-
         },
 
 
@@ -644,6 +404,23 @@ visualizations: bump in time to the music
         },
 
 
+        _getRGB: function(point, opacity) {
+            opacity = opacity || 1;
+            var zindex = 150;
+            //var zindex = Math.round(point.distance * 12);
+            //var rgbarr = point.rgb.split(',');
+            var rgb = 'rgba(';
+            if (typeof point.name === 'string') {
+                rgb += '255,255,255,1)';
+            } else {
+                if (point.song_number == 0) { rgb += '150,0,0,' + opacity + ')';
+                } else if (point.song_number == 1) { rgb += '0,150,0,' + opacity + ')';
+                } else if (point.song_number == 2) { rgb += '0,0,150,' + opacity + ')';
+                } else { rgb += '255,255,255,1)'; }
+
+            }
+            return rgb;
+        },
 
 
         _removeMarkers: function() {
@@ -658,6 +435,113 @@ visualizations: bump in time to the music
         },
 
 
+        _deletePoint: function(pointId) {
+            // console.log('_deletePoint calling _stop', pointId)
+            this._removeSocket(pointId);
+            for (var i in this.pointsByDistance) {
+                if (this.pointsByDistance[i] == pointId) delete this.pointsByDistance[i];
+            }
+            this._stop(pointId);
+
+            var point = this.points[pointId];
+            if (point) {
+                if (point.marker) point.marker.setMap(null);
+                delete this.points[pointId];
+            }
+        },
+
+
+        _getPeople: function () {
+            var self = this;
+            if (this.isLocated == true) { // this can only happen after we know where we are
+
+                // make the points call
+                var points_url = '/api/v1/points/near/'+ this.lat +'/'+ this.lng + '?people=true' + (this.point ? '?excludeId='+ this.point.id : '');
+                $.get(points_url, function(points) {
+
+                    var new_points = [];
+                    for (var i in points) {
+                        if (points.hasOwnProperty(i)) {
+
+                            var pointId = points[i].id;
+
+                            if (!self.points[pointId]) {
+                                self.points[pointId] = points[i];
+                            }
+
+                            if ($.inArray(pointId, self.sockets) < 0) {
+                                self._addSocket(pointId);
+                            }
+
+                            new_points[pointId] = pointId;
+
+                        }
+
+                    }
+
+                    // delete any people that have disappeared from the db
+                    for (var i in self.sockets) {
+                        if ($.inArray(parseInt(i), new_points) < 0) {
+                            self._deletePoint(i);
+                        }
+                    }
+
+
+                });
+            }
+        },
+
+
+        _getPoints: function () {
+            var self = this;
+            if (this.isLocated == true) { // this can only happen after we know where we are
+                // if location hasn't changed, don't get new points.
+                if (this.isPositionUpdated) {
+                    this.isPositionUpdated = false;
+
+                    if (!this.getPointsProcessing) { // don't start another points process until this one is finished.
+                        this.getPointsProcessing = true;
+
+                        if (self.album) { // can't do this unless we have an album downloaded. We should, if we don't there are big problems anyway.
+
+                            // make the points call
+                            var points_url = '/api/v1/points/near/'+ this.lat +'/'+ this.lng + (this.point ? '?excludeId='+ this.point.id : '');
+                            $.get(points_url, function(points) {
+
+                                self.updateMedleyId(); // figure out what medley we're in
+
+
+                                for (var i in points) {
+                                    if (points.hasOwnProperty(i)) {
+
+                                        var pointId = points[i].id;
+
+                                        if (!self.points[pointId]) {
+                                            self.points[pointId] = points[i];
+                                        }
+
+                                        var point = self.points[pointId];
+
+                                        if (typeof point.song_number != 'undefined' && typeof point.song_number == 'number') {
+                                            // update the track_url for each point to reflect the new medley
+                                            point.track_url = '/albums/' + self.album.name + '/' + (self.medleyId - 1) + '/' + point.song_number + '/' + point.track_number + '.mp3';
+
+                                        }
+
+                                    }
+
+                                }
+
+                                self.getPointsProcessing = false;
+                                self._secondTick();
+
+                            });
+                        }
+                    }
+                }
+            }
+            
+        },
 
 
 
@@ -686,7 +570,111 @@ visualizations: bump in time to the music
         },
 
 
-        setLatLng: function (lat, lng) {
+        _initOneoffs: function() {
+
+            var self = this;
+
+            // preload soundboard
+            self.soundboard[0] = '/albums/Northern Spark/soundboard/1-COWBELL.mp3';
+            self.soundboard[1] = '/albums/Northern Spark/soundboard/2-CLAP.mp3';
+            self.soundboard[2] = '/albums/Northern Spark/soundboard/3-WOW.mp3';
+            self.soundboard[3] = '/albums/Northern Spark/soundboard/4-CYMBAL.mp3';
+            self.soundboard[4] = '/albums/Northern Spark/soundboard/5-SFX.mp3';
+            self.soundboard[5] = '/albums/Northern Spark/soundboard/6-DJ SIREN.mp3';
+
+            for (var i in self.soundboard) {
+                // console.log(self.soundboard[i])
+                self.oneOff({ url: self.soundboard[i], preloadOnly: true });
+                var a = $('<a data-soundid="'+ i +'">'+ i +'</div>').click($.proxy(handleSoundboard, self));
+                $('#soundboard').append(a);
+            }
+
+
+            // preload stingers
+            self.stingers[0] = '/albums/Northern Spark/stingers/01.mp3';
+            self.stingers[1] = '/albums/Northern Spark/stingers/02.mp3';
+
+            for (var i in self.stingers) {
+                self.oneOff({ url: self.stingers[i], preloadOnly: true });
+            }
+
+            // when stinger is loaded, finish up the load when initial stinger is preloaded.
+            self.oneOff({
+                url: '/albums/Northern Spark/stingers/01.mp3',
+                callback: function() {
+                    // This finishes the initial load
+                    self.displayStartButton();
+                },
+                preloadOnly: true
+            });
+
+        },
+
+
+
+        _playBuffer: function(stinger, lat, lng) {
+            // stop it first
+            // console.log('_playBuffer', stinger, lat, lng)
+            if (stinger) if (stinger.source) if (stinger.isPlaying) if (stinger.source.noteOff) stinger.source.noteOff(0); else stinger.source.stop(0);
+            
+
+                lat = lat || this.lat;
+                lng = lng || this.lng;
+
+                // create a new disposable one-off
+                stinger.source = this.context.createBufferSource(); 
+                stinger.source.buffer = stinger.buffer;
+
+                stinger.panner = this.context.createPanner();
+                stinger.panner.refDistance = .00008;
+                stinger.panner.rolloffFactor = 10;
+                stinger.panner.setPosition(lat, lng, 0);
+                stinger.panner.connect(this.context.destination);
+                stinger.source.connect(stinger.panner);
+           
+
+
+                stinger.isPlaying = true;
+                if (stinger.source.noteOn) stinger.source.noteOn(0); else stinger.source.start(0);
+                // TODO: make isPlaying go off after buffer.duration
+
+                return stinger;
+
+        },
+
+
+
+        oneOff: function(arg, lat, lng) {
+            var self = this;
+            //console.log('oneOff ', arg.url, lat, lng)
+            if (self.oneoff_buffers[arg.url]) {
+                // we've played this one before, we've stored a buffer
+                if (!arg.preloadOnly) self.oneoff_buffers[arg.url] = self._playBuffer(self.oneoff_buffers[arg.url], lat, lng);
+                if (arg.callback) if (typeof arg.callback == 'function') arg.callback();
+
+            } else {
+                // we haven't played this one yet, have to load it first.
+                self.oneoff_buffers[arg.url] = { id:123, track_url: arg.url };
+                var stingerLoader = new AudioLoader (
+                    self.context,
+                    self.oneoff_buffers[arg.url],
+                    function (buffer, pointId) {
+                        var tmpaud = {};
+                        tmpaud.buffer = buffer;
+                        self.oneoff_buffers[arg.url] = tmpaud;
+
+                        if (!arg.preloadOnly) self.oneoff_buffers[arg.url] = self._playBuffer(self.oneoff_buffers[arg.url], lat, lng);
+                        if (typeof arg.callback == 'function') arg.callback();
+                    }
+                );
+                stingerLoader.load();
+            }
+
+        },
+
+
+
+        setAudioPosition: function (lat, lng) {
             if (!lat) { lat = this.lat; } else { this.lat = lat; }
             if (!lng) { lng = this.lng; } else { this.lat = lng; }
 
@@ -694,79 +682,11 @@ visualizations: bump in time to the music
         },
 
 
-        _setMedleyId: function () {
-
-            var album_length = this.medley_length * this.album.medleys.length;
-
-            // Find current medley. 
-            this._setMedleyOffset();
-            var medley = Math.floor((this.universal_time % album_length) / this.medley_length);
-
-            var new_medley = this.album.medleys[medley];
-
-            // NEW MEDLEY: Reset buffers and junk
-            if (this.medleyId != new_medley.id) {
-                this.medleyId = new_medley.id;
-                this.resetMedley();
-            }
-
-        },
-
-        resetMedley: function() {
-            if (this.isLoaded) {
-                // console.log('resetting medley', this.points)
-                this.oneOff({ url: this.stingers[Math.floor(this.stingers.length * Math.random())] });
-                this._stopAll();
-                this.audio = [];
-                this.audio_buffer = [];
-
-                for (var i in this.points) {
-                    if (this.points.hasOwnProperty(i)) {
-                        var point = this.points[i];
-                        // update the track_url for each point to reflect the new medley
-                        if (typeof point.song_number != 'undefined' && typeof point.song_number == 'number') {
-                            point.track_url = '/albums/' + this.album.name + '/' + (this.medleyId - 1) + '/' + point.song_number + '/' + point.track_number + '.mp3';
-                        }
-                    }
-                }
-
-               
-
-            }
-        },
-
-        _setMedleyOffset: function () {
-            this.universal_time = new Date().getTime();
-            //console.log(this.time_anchor)
-            if (typeof this.time_anchor != 'undefined') {
-                this.universal_time += this.time_anchor;
-            }
-            this.universal_time /= 1000;
-            this.medley_offset = (this.universal_time % (this.medley_length));
-            //console.log('_setMedleyOffset', this.universal_time)
-        },
 
 
 
-        setTimeAnchor: function(t) {
 
-            if (typeof t !== 'undefined') {
-                var nextTimeAnchor = t - new Date().getTime();// + this.gps_delta;
 
-                if (typeof this.time_anchor != 'undefined') {
-                    if (Math.abs(nextTimeAnchor - this.time_anchor) > 200) { // only reset if it's off by more than 1/5 of a second. Includes ping time
-                        // console.log('setTimeAnchor', nextTimeAnchor, t)
-                        this.isTimeAnchorReset = true;
-                        this.time_anchor = nextTimeAnchor;
-                    }
-
-                } else { // first time through, just set it.
-                    // console.log('setTimeAnchor 1', nextTimeAnchor, t)
-                    this.isTimeAnchorReset = true;
-                    this.time_anchor = nextTimeAnchor;
-                }
-            }
-        },
 
 
         _play: function (point) {
@@ -777,7 +697,7 @@ visualizations: bump in time to the music
                     if (!this.audio[point.id].isPlaying && this.audio[point.id].source) {
                         var src = this.audio[point.id].source;
 
-                        this._setMedleyOffset();
+                        this.updateMedleyOffset();
 
                         var starthere = this.medley_offset % src.buffer.duration;
                         try {
@@ -874,7 +794,6 @@ visualizations: bump in time to the music
 
         _createAudioBufferNode: function (pointId, loop) {
             var point = this.points[pointId];
-            var trackId = point.trackId;
 
             if (point) {
 
@@ -923,171 +842,348 @@ visualizations: bump in time to the music
 
 
 
+        _playTracks: function() {
+
+
+            // start the playhead according to timestamp.
+            var self = this;
+
+            // update the playable points
+            this.updateMedleyId();
+
+
+            // This fires off if we've gotten a GPS time offset for our local clock that's more than 1/10 second latency
+            // Restart all the existing tracks to sync with the new clock
+
+            // if (true) {
+            // if (false) {
+            if (this.isTimeAnchorReset) {
+                this.isTimeAnchorReset = false;
+
+                var point_counter = 0;
+                //console.log('_playTracks', this.points.length)
+                for (var distance = 0; distance < this.pointsByDistance.length; distance++) {
+
+                    if (this.pointsByDistance.hasOwnProperty(distance)) {
+
+                        var point = this.points[this.pointsByDistance[distance]];
+
+                        if (point && point.track_url) {
+                            // point exists and is not a person
+                            if (point.distance < this.radius) {
+                                // point is within radius
+                                if (point_counter++ < self.MAXIMUM_TRACKS_PLAYABLE) {
+                                    // point is in the top few closest tracks
+                                    //if (this.audio[point.id] && this.audio[point.id].isPlaying) {
+                                        // TODO: this is where we should space them out over the course of a second using timeouts.
+                                        // console.log('_secondTick', point.id, point_counter * 50)
+                                        // setTimeout(function() {
+                                        //     this.updateMedleyId();
+                                            self._stop(point.id);
+                                            self._play(point);
+                                        // }, point_counter * 20);
+                                    // } else {
+                                    //     self._play(point);
+                                    // }
+
+
+                                // point is outside max tracks, stop it.
+                                } else {
+                                    self._stop(point.id);
+                                }
+
+                            // point is outside radius.
+                            } else  {
+                                this._deletePoint(point.id);
+                            }
+
+                        // point either does not exist, or is a person
+                        } else {
+                            // console.log('_playTracks: ', distance, point, this.pointsByDistance[distance])
+                        }
+                    }
+                }
+
+
+            // Latency good, just play
+            } else {
+
+
+                var point_counter = 0;
+                for (var distance = 0; distance < this.pointsByDistance.length; distance++) {
+                    if (this.pointsByDistance.hasOwnProperty(distance)) {
+
+                        var point = this.points[this.pointsByDistance[distance]];
+
+                        if (point && point.track_url) {
+                            // point exists and is not a person
+                            if (point.distance < this.radius) {
+                                // point is within radius
+                                if (point_counter++ < self.MAXIMUM_TRACKS_PLAYABLE) {
+                                    // point is in the top few closest tracks
+                                    if (this.audio[point.id] && this.audio[point.id].isPlaying) {
+                                        // point has an audio entry. do nothing! It already exists and should be playing.
+                                        // console.log('_playTracks: ', point.id, 'is already playing', this.audio[point.id])
+                                    } else {
+                                        self._play(point);
+                                    }
+
+
+                                // point is outside max tracks, stop it.
+                                } else {
+                                    self._stop(point.id);
+                                }
+
+                            // point is outside radius.
+                            } else  {
+                                this._deletePoint(point.id);
+                            }
+
+                        // point either does not exist, or is a person
+                        } else {
+                            // console.log('_playTracks: ', distance, point, this.pointsByDistance[distance])
+                        }
+                    }
+                }
+
+          }
+
+
+
+        },
+
+
+
+
+
+
+
+
 /*  ################################################################################################
-    VISUALIZATIONS
+    WEBSOCKETS
     ################################################################################################
 */
 
-        // Move according to gyro!
-        _drawDots: function(compass, pitch) {
+
+        _initSockets: function() {
             var self = this;
-
-            var xmid = Math.round(self.vw / 2);
-            var ymid = Math.round(self.vh / 4);
-
-
-
-            var perspective = self.vmax; // 1500 is far away, 200 is close
-
-            self.$visualizations.css({
-                'perspective': perspective,
-                '-webkit-perspective': perspective,
-                '-moz-perspective': perspective,
-                '-ms-perspective': perspective,
-                '-o-perspective': perspective,
-                //'transform': ''
-            })
-
-
-            $('.vdot').each(function(i, o) {
-                var dot = $(this);
-
-                var angle = compass + dot.data('angle') + 180; // angle of dot from center dot according to which direction we're facing
-                var radians = angle * (Math.PI / 180); // converted to radians
-
-                var distance = dot.data('distance'); // distance in meters to dot
-                var op_distance = 10 - distance; // inverse distance value (10 is the default radius)
-
-                var radius = distance * self.vw;
-
-                var t = '';
-
-                // center to screen center
-                t += ' translateY(' + ymid + 'px) ';
-                t += ' translateX(' + xmid + 'px) ';
-
-                // push straight back in 3d space
-                t += ' translate3d(' + 0 + 'px, ' + 0 + 'px, ' + (radius * Math.cos(radians)) + 'px) ';
-
-                // push horizontally and back to where the dot actually sits.
-                t += ' translate3d(' + (radius * Math.sin(radians)) + 'px, ' + 0 + 'px, ' + (radius * Math.cos(radians)) + 'px) ';
-
-                //t += ' rotateY(-'+angle+'deg) ';
-
-
-                dot.css({
-                    '-webkit-transform': t,
-                    '-moz-transform': t,
-                    '-o-transform': t,
-                    'transform': t
-                });
-
-                //self.$visualizations.css({ 'top': (pitch * (ymid / 90)) })
-
+            this.socket = io.connect(this.url + ':3001');
+            this.socket.on('error', function() { console.error(arguments) });
+            this.socket.on('message', function(data) {
+                console.log('message response:', data);
+            });
+            this.socket.on('pong', function(data) {
+                if (data && self.point)
+                if (self.points[data.id] && data.id != self.point.id) {
+                    // console.log('pong', data.server_time, d.getTime(), data.server_time - d.getTime())
+                    if (self.points[data.id]) if (self.points[data.id].marker) self.points[data.id].marker.setPosition( new google.maps.LatLng (data.lat, data.lng) );
+                }
+            });
+            this.socket.on('song', function(data) {
+                self.oneOff({ url: data.url }, data.lat, data.lng);
             });
         },
 
 
-        _placeVisualizations: function (compass, pitch, clearAll) {
+        _addSocket: function(socketid) {
+            //console.log('_addSocket', socketid);
+            this.sockets[socketid] = socketid;
+            this.socket.emit('join', socketid);
+        },
+
+
+        _removeSocket: function(socketid) {
+            // console.log('_removeSocket', socketid);
+            if (this.sockets[socketid]) delete this.sockets[socketid];
+        },
+
+
+        _uploadPositionSuccess: function(result) {
             var self = this;
-            var vis_ids = [];
+            var point = result;
 
-            //console.log('_placeVisualizations', self.MAXIMUM_TRACKS_PLAYABLE)
-            if (clearAll) this.$visualizations.html('');
+            self.point = point;
+            self.point.name = self.point.id;
 
-            // loop through radius points and draw visuals
-            var point_counter = 0;
-            for (var i in self.points) {
+            // play my own emissions!
+            if (self.point) if ($.inArray(self.point.id, self.sockets) < 0) { self._addSocket(self.point.id); }
+            
+        },
 
-                var point = self.points[i];
+        _uploadPosition: function () {
+            // This is the heartbeat for our current location. If we don't keep updating the server, we disappear from others.
+            if (this.isLocated == true) {
 
-                var pointIsMe = true;
-                if (self.point) { // if we have an internalized point, make sure it matches.
-                    if (self.point.id != point.id) pointIsMe = false;
-                } else {
-                    pointIsMe = false;
-                }
-                if (point_counter++ < self.MAXIMUM_POINTS_VISIBLE && point.distance > .1 && !pointIsMe) {
-                
-                        var rgb = self._getRGB(point);
+                var self = this;
+                var posturl = '/api/v1/points';
 
-                        var lat_ = point.lat - self.lat;
-                        var lng_ = point.lng - self.lng;
-                        var rad = Math.atan2(lat_, lng_);
+                if (this.socket) {
 
-                        // angle is the angle from 0 that the dot is located. -180 -> 180
-                        var angle = (rad * (180 / Math.PI) - 90);
+                    if (this.point) {
+                        // update
 
-                        vis_ids.push(point.id)
+                        var upd_posturl = posturl +  '/' + this.point.id;
 
-                        if (clearAll) {
-                            $vis = $('<div class="vdot" data-id="'+ point.id +'" style=""></div>');
-                            self.$visualizations.prepend($vis);
-
-                        } else {
-                            var $vis = $('[data-id="'+point.id+'"]');
-                            if ($vis.length == 0) {
-                                $vis = $('<div class="vdot" data-id="'+ point.id +'" style=""></div>');
-                                self.$visualizations.append($vis);
-                            }
-
+                        var point = {
+                            id: this.point.id,
+                            lat: this.lat,
+                            lng: this.lng,
+                            latlng: {lat:this.lat, lng: this.lng},
+                            accuracy: this.accuracyInMeters,
+                            name: this.point.id
                         }
 
-                        var size = self.vmax;
-                        $vis.css({
-                            height: size,
-                            width: size,
-                            top: -size / 2,
-                            left: -size / 2,
-                            'background-color': rgb,
-                            'z-index': Math.round(30 - point.distance)
+                        // heartbeat to server: update date
+                        if (this.point.date) {
+                            var d = new Date(this.point.date);
+                            var sec = d.getSeconds();
+                            d.setSeconds(sec + (self.MOMENT / 1000))
+                            if (sec >= 60) {
+                                d.setSeconds(0); d.setMinutes(d.getMinutes() + 1);
+                            }
+
+                            point.date = d;
+                        }
+
+                        $.ajax({
+                            type: 'PUT',
+                            url: upd_posturl,
+                            data: point,
+                            success: $.proxy(self._uploadPositionSuccess, self),
+                            // if it 404s try just adding the point again, it may have gotten deleted
+                            error: function() { self._addMyPoint(posturl); }
                         });
+                   
 
-                        $vis.data({ 'angle': Math.round(angle), 'distance': Math.round(point.distance) });
+                    } else {
+                        // add my point, it doesn't exist yet.
+                        this._addMyPoint(posturl);
 
-                
-                } else {
-                    break;
+                    }
                 }
-
             }
-
-            // remove unused visualizations
-            self.$visualizations.children().each(function() {
-                var vis = $(this);
-                var visid = vis.attr('data-id');
-                var inside = false;
-                for (var id in vis_ids) {
-                    if (vis_ids[id] == visid) inside = true;
-                }
-                if (!inside) {
-                    vis.remove();
-                }
-            });
-
-            
-            self._drawDots(this.current_rotation, this.current_pitch);
-
 
         },
 
-        _getRGB: function(point, opacity) {
-            opacity = opacity || 1;
-            var zindex = 150;
-            //var zindex = Math.round(point.distance * 12);
-            //var rgbarr = point.rgb.split(',');
-            var rgb = 'rgba(';
-            if (typeof point.name === 'string') {
-                rgb += '255,255,255,1)';
-            } else {
-                if (point.song_number == 0) { rgb += '150,0,0,' + opacity + ')';
-                } else if (point.song_number == 1) { rgb += '0,150,0,' + opacity + ')';
-                } else if (point.song_number == 2) { rgb += '0,0,150,' + opacity + ')';
-                } else { rgb += '255,255,255,1)'; }
+
+        _addMyPoint: function(posturl) {
+            // add
+            var self = this;    
+            var point = {
+                trackId: 0,
+                lat: this.lat,
+                lng: this.lng,
+                latlng: {lat:this.lat, lng: this.lng},
+                accuracy: this.accuracyInMeters,
+                name: this.point ? this.point.id : 'person'
+            };
+            $.post(posturl, point, $.proxy(self._uploadPositionSuccess, self));
+
+        },
+
+
+
+
+
+
+
+
+
+/*  ################################################################################################
+    TIMING AND SYNCHRONIZATION
+    ################################################################################################
+*/
+
+
+        updateMedleyId: function () {
+
+            var album_length = this.medley_length * this.album.medleys.length;
+
+            // Find current medley. 
+            this.updateMedleyOffset();
+            var medley = Math.floor((this.universal_time % album_length) / this.medley_length);
+
+            var new_medley = this.album.medleys[medley];
+            // console.log('updateMedleyId', this.medleyId, new_medley.id, this.isLoaded)
+
+            // NEW MEDLEY: Reset buffers and junk
+            if (this.medleyId != new_medley.id) {
+                this.medleyId = new_medley.id;
+                this.resetMedley();
+            }
+
+        },
+
+        updateMedleyOffset: function () {
+            this.universal_time = new Date().getTime();
+            if (typeof this.time_anchor != 'undefined') {
+                this.universal_time += this.time_anchor;
+            }
+            this.universal_time /= 1000;
+            this.medley_offset = (this.universal_time % (this.medley_length));
+            //console.log('updateMedleyOffset', this.universal_time)
+        },
+
+        resetMedley: function() {
+            if (this.isLoaded) {
+                // console.log('resetting medley', this.points)
+                this.oneOff({ url: this.stingers[Math.floor(this.stingers.length * Math.random())] });
+                this._stopAll();
+                this.audio = [];
+                this.audio_buffer = [];
+
+                for (var i in this.points) {
+                    if (this.points.hasOwnProperty(i)) {
+                        var point = this.points[i];
+                        // update the track_url for each point to reflect the new medley
+                        if (typeof point.song_number != 'undefined' && typeof point.song_number == 'number') {
+                            point.track_url = '/albums/' + this.album.name + '/' + (this.medleyId - 1) + '/' + point.song_number + '/' + point.track_number + '.mp3';
+                        }
+                    }
+                }
 
             }
-            return rgb;
         },
+
+        updateTimeAnchor: function(t, lag) {
+
+            if (typeof t !== 'undefined') {
+                var nextTimeAnchor = t - new Date().getTime(); // Trying to compensate for ping time;
+
+                if (typeof this.time_anchor != 'undefined') {
+
+                    var delta = nextTimeAnchor - this.time_anchor;
+                    // console.log('updateTimeAnchor: ')
+                    // console.log('     nextTimeAnchor:' + nextTimeAnchor + '; ' + typeof nextTimeAnchor)
+                    // console.log('     this.time_anchor:' + this.time_anchor  + '; ' + typeof this.time_anchor)
+                    // console.log('     delta:' + delta  + '; ' + typeof delta)
+                    // console.log('     lag:' + lag  + '; ' + typeof lag)
+                    // console.log('     lagdiff:' + (delta - lag) )
+                    // console.log('     this.universal_time:' + this.universal_time  + '; ' + typeof this.universal_time)
+
+                    if (Math.abs(delta) > 100) { // only reset if it's off by more than 1/5 of a second. Includes ping time
+                        this.isTimeAnchorReset = true;
+                        this.time_anchor = nextTimeAnchor - (lag/2);
+                    }
+
+                } else { // first time through, just set it.
+                    // console.log('updateTimeAnchor 1', nextTimeAnchor, t)
+                    this.isTimeAnchorReset = true;
+                    this.time_anchor = nextTimeAnchor;
+                }
+            }
+        },
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1097,9 +1193,20 @@ visualizations: bump in time to the music
     ################################################################################################
 */
 
+
+        _getTime: function() {
+            // poll the server for the current time
+            var self = this;
+            var test = new Date().getTime();
+            $.get('/api/v1/points/time', function(time) {
+                self.updateTimeAnchor(time, new Date().getTime() - test);
+            })
+        },
+
+
         geoLocate: function () {
+            var self = this;
             if (navigator.geolocation && this.useGPS) {
-                var self = this;
                 navigator.geolocation.getCurrentPosition(
                     function() { // callback function to set a timer
                         self.isLocated = true;
@@ -1115,150 +1222,26 @@ visualizations: bump in time to the music
                             // give up, geolocation is broken.
                             console.log('Giving up on geolocation, too many errors.');
                             self.isLocated = true;
-                            // self.setLatLng();
+                            // self.setAudioPosition();
                             self.setGPSLocation({ timestamp: new Date().getTime(), coords: {latitude: self.lat, longitude: self.lng, accuracy: self.DEFAULT_ACCURACY} });
                         }
                     },
                     { maximumAge: self.geolocationSpeed, timeout: self.geolocationSpeed, enableHighAccuracy: true } // position options
                 );
             } else { // fake it, probably on desktop anyway
-                self.isLocated = true;
+                this.isLocated = true;
                 console.log('No navigator.geolocation.', this.lat, this.lng);
                 this.setGPSLocation({ timestamp: new Date().getTime(), coords: {latitude: this.lat, longitude: this.lng, accuracy: this.DEFAULT_ACCURACY} });
             }
 
         },
 
-        // preGeoLocated: function (position) {
-        //     // Set a timer to sample the geolocation every few seconds.
-        //     var curdate = new Date().getTime();
-        //     if (!this.curdate) this.curdate = curdate;
-        //     if (curdate - this.curdate > this.geolocationSpeed || this.curdate == curdate) {
-        //         this.geoLocated(position);
-        //         this.curdate = curdate;
-        //     }
-        // },
-
         setGPSLocation: function(position) {
-            // console.log(position)
-            this.position = position;
-            // TODO: once we get a stable way to schedule tracks for restart, we can't really set TimeAnchor regularly as it causes stutters on iPhone.
-            //if (position.timestamp) this.setTimeAnchor(position.timestamp);
-            // console.log('setGPSLocation', this.position.timestamp)
-        },
-
-        // geoLocated: function (position) {
-        //     // keep everyone in sync!
-        //     this.setTimeAnchor(position.timestamp);
-
-        //     var self = this;
-        //     //console.log('geolocated: ', position)
-        //     if (navigator.geolocation && this.isMobile && this.useGPS) {
-        //         navigator.geolocation.clearWatch(this.GPSInterval);
-        //         clearTimeout(this.watchPositionTimer);
-        //         this.watchPositionTimer = setTimeout(
-        //             function() {
-        //                 self.GPSInterval = navigator.geolocation.watchPosition( $.proxy(self.preGeoLocated, self), null, { maximumAge: self.geolocationSpeed - 1, timeout: self.geolocationSpeed } );
-        //             }, this.geolocationSpeed
-        //         );
-        //     }
-
-        //     this.translateGPSCoordinates(position);
-
-        // },
-
-
-        translateGPSCoordinates: function(pos) {
-            if (this.isLocated == true) {
-                //console.log('translateGPSCoordinates: ', pos)
-                var self = this;
-                //if (pos.timestamp) this.setTimeAnchor(pos.timestamp);
-
-                // If this distance is too big, just reset it. This can happen on initial load.
-                if (this.lat - pos.coords.latitude > .0001) {
-                    this.lat = pos.coords.latitude;
-                    this.lng = pos.coords.longitude;
-                }
-                
-                var xdist = Math.abs(this.lat - pos.coords.latitude) * 100000;
-                var ydist = Math.abs(this.lng - pos.coords.longitude) * 100000;
-
-                // should be the distance between where we were and where we are now in meters.
-                var radius = Math.pow(xdist, 2) + Math.pow(ydist, 2);
-
-                var initialLoad = false;
-                if (!this.accuracyInMeters) {
-                    initialLoad = true;
-                }
-
-                // // check the deltas to make sure it's above the accuracy threshold.
-
-                if (typeof pos.coords.accuracy === 'undefined') pos.coords.accuracy = this.DEFAULT_ACCURACY;
-                
-                // Let server know we've moved.
-                if (this.point) {
-                    this.point.lat = this.lat;
-                    this.point.lng = this.lng;
-                    this.point.latlng = { lat:this.lat, lng: this.lng };
-                    // this.point.gps_anchor = this.gps_delta;
-
-                    this.socket.emit('ping', this.point);
-                }
-
-                if (this.isMobile) {
-                    this.accuracyInMeters = pos.coords.accuracy; // limit this to 10 just in case there's no geolocation at all
-                } else {
-                    this.accuracyInMeters = Math.min(pos.coords.accuracy, this.DEFAULT_ACCURACY); // limit this to 10 just in case there's no geolocation at all
-                }
-                // if (this.radiusCircle) this.radiusCircle.setRadius(this.accuracyInMeters);
-                var accuracyDelta = this.accuracyInMeters;
-
-                //console.log('radius: ', radius, '; xdist: ', xdist, '; ydist: ', ydist, '; accdelta: ', accuracyDelta)
-
-                // THIS IS IMPORTANT: IT HAPPENS WHEN THE USER HAS MOVED FROM THEIR PREVIOUS LOCATION
-                var cond = true;
-                //if (this.isMobile) cond = radius/3 > accuracyDelta || initialLoad; // only actually check mobile for radius vs accuracy. Any movement on desktop counts here.
-                if (cond) {
-                    this.lat = pos.coords.latitude;
-                    this.lng = pos.coords.longitude;
-
-
-
-                    // Update the distance.
-                    for (var i in self.points) {
-                        var point = self.points[i];
-                        if (point) {
-                            // console.log('translateGPSCoordinates: ', i, point)
-                            var new_distance = Math.sqrt(Math.pow(point.lat - pos.coords.latitude, 2) + Math.pow(point.lng - pos.coords.longitude, 2));
-                            point.distance = new_distance * 100000// * this.meters_to_degrees * 10000;
-                        }
-                    }
-
-                    this.pointsByDistance = [];
-
-                    for (var i in this.points) {
-                        if (this.points.hasOwnProperty(i)){
-                            var point = this.points[i];
-                            this.pointsByDistance[Math.round(point.distance * 1000)] = point.id;
-                        }
-                    }
-
-
-
-                    this.setLatLng();
-                    this.map.setCenter(new google.maps.LatLng(this.lat, this.lng));
-
-                    // self._placeVisualizations();
-                    self._drawRadius();
-
-                    if (initialLoad) this._getPoints();
-
-
-                }
+            if (typeof this.position == 'undefined' || (this.position.coords.latitude != position.coords.latitude && this.position.coords.longitude != position.coords.longitude)) {
+                this.position = position;
+                this.isPositionUpdated = true;
             }
         },
-
-
 
 
 
@@ -1361,32 +1344,22 @@ visualizations: bump in time to the music
                 compass = 0; pitch = 0;
             }
 
-            // draw the actual visualizations on screen
-            //compass = 360 - compass
-
-            if (!this.viewMap) this._drawDots(compass, pitch);
 
             this.current_rotation = compass;
             this.current_pitch = pitch;
 
-            if (!this.viewMap) {
-                pitch = Math.round(pitch * this.vmin/180) * 2
-                this.$cube.css({ top: pitch }); // TODO: make this a better solution! This is ridiculous.
+
+            // move the direction arrow
+            if (this.compass_needle) {
+                var ico = this.compass_needle.getIcon();
+                ico.rotation = compass;
+                this.compass_needle.setIcon(ico);
             }
 
-            if (this.viewMap) {
-                // move the direction arrow
-                if (this.compass_needle) {
-                    var ico = this.compass_needle.getIcon();
-                    ico.rotation = compass;
-                    this.compass_needle.setIcon(ico);
-                }
+            // rotate the map so it's compass-stable
+            var t = 'translate3d('+ this.diagonal_diff_x +'px, '+ this.diagonal_diff_y +'px, 0px) rotateZ(-' + this.current_rotation + 'deg) ';
+            this.map_container.css({ 'transform': t, '-webkit-transform': t })
 
-                // rotate the map so it's compass-stable
-                var t = 'translate3d('+ this.diagonal_diff_x +'px, '+ this.diagonal_diff_y +'px, 0px) rotateZ(-' + this.current_rotation + 'deg) ';
-                this.map_container.css({ 'transform': t, '-webkit-transform': t })
-
-            }
 
 
             // update the soundstage for orientation
@@ -1398,83 +1371,12 @@ visualizations: bump in time to the music
 
         },
 
-        _deletePoint: function(point) {
-            // console.log('_deletePoint calling _stop', point)
-            this._removeSocket(point.id);
-            for (var i in this.pointsByDistance) {
-                if (this.pointsByDistance[i] == point.id) delete this.pointsByDistance[i];
-            }
-            if (point.marker) point.marker.setMap(null);
-            this._stop(point.id);
-            delete this.points[point.id];
-        },
-
-
-        _getPoints: function () {
-            if (this.isLocated == true) { // this can only happen after we know where we are
-                if (!this.getPointsProcessing) { // don't start another points process until this one is finished.
-                    this.getPointsProcessing = true;
-                    var self = this;
-
-                    if (self.album) { // can't do this unless we have an album downloaded. We should, if we don't there are big problems anyway.
-
-                        // make the points call
-                        var points_url = '/api/v1/points/near/'+ this.lat +'/'+ this.lng + (this.point ? '?excludeId='+ this.point.id : '');
-                        $.get(points_url, function(points) {
-
-                            self._setMedleyId(); // figure out what medley we're in
-
-                            // keep the locals up to date every load
-                            for (var i in self.sockets) {
-                                if (self.points[i]) {
-                                    self._deletePoint(self.points[i]);
-                                }
-                            }
-
-
-                            for (var i in points) {
-                                if (points.hasOwnProperty(i)) {
-
-                                    var pointId = points[i].id;
-
-                                    if (!self.points[pointId]) {
-                                        self.points[pointId] = points[i];
-                                    }
-
-                                    var point = self.points[pointId];
-                                    if (typeof point.song_number != 'undefined' && typeof point.song_number == 'number') {
-                                        // update the track_url for each point to reflect the new medley
-                                        point.track_url = '/albums/' + self.album.name + '/' + (self.medleyId - 1) + '/' + point.song_number + '/' + point.track_number + '.mp3';
-
-                                    } else {
-                                        // it is a person, turn on new socket connection if person doesn't yet exist
-                                        if ($.inArray(pointId, self.sockets) < 0) {
-                                            self._addSocket(pointId);
-                                        }
-
-                                    }
-
-                                }
-
-                            }
-
-                            self.getPointsProcessing = false;
-                            self._secondTick();
-
-                        });
-                    }
-                }
-            }
-            
-        },
-
-
 
 
         _minuteTick: function() {
             // console.log('_minuteTick')
             // set offset from the server to sync everyone.
-            this._getTime();
+            // this._getTime();
 
         },
 
@@ -1484,14 +1386,24 @@ visualizations: bump in time to the music
             // console.log('_momentTick')
             this._uploadPosition();
             this._getPoints();
+            this._getPeople();
+            this._getTime();
         },
 
 
         _secondTick: function () {
+            // console.log('_secondTick')
 
             if (this.position) {
                 this.lat = this.position.coords.latitude;
                 this.lng = this.position.coords.longitude;
+
+                if (this.isMobile) {
+                    this.accuracyInMeters = this.position.coords.accuracy; // limit this to 10 just in case there's no geolocation at all
+                } else {
+                    this.accuracyInMeters = this.DEFAULT_ACCURACY; // limit this to 10 just in case there's no geolocation at all
+                }
+
 
                 // center map on our new location
                 this.map.setCenter(new google.maps.LatLng(this.lat, this.lng));
@@ -1500,7 +1412,7 @@ visualizations: bump in time to the music
                 this._drawRadius();
 
                 // let audio subsystem know we've moved.
-                this.setLatLng();
+                this.setAudioPosition();
 
                 // Let subscriber sockets know we've moved.
                 if (this.point) {
@@ -1511,7 +1423,7 @@ visualizations: bump in time to the music
                 }
 
 
-                // Update the points arrays and markers
+                // Update the points arrays and markers, recalculate distances to points
                 this.pointsByDistance = [];
 
                 for (var i in this.points) {
@@ -1527,7 +1439,7 @@ visualizations: bump in time to the music
 
                             // if point is too far away, just delete it
                             if (point.distance > this.DEFAULT_RADIUS) {
-                                this._deletePoint(point);
+                                this._deletePoint(point.id);
 
                             } else {
                             // otherwise, add it to the points by distance array for playing
@@ -1560,129 +1472,6 @@ visualizations: bump in time to the music
                 this._playTracks();
 
             }
-
-
-        },
-
-
-
-        _getTime: function() {
-            // poll the server for the current time
-            var self = this;
-            $.get('/api/v1/points/time', function(time) {
-                self.setTimeAnchor(time);
-            })
-        },
-
-
-
-        _playTracks: function() {
-
-
-            // start the playhead according to timestamp.
-            var self = this;
-
-            // update the playable points
-            this._setMedleyId();
-
-
-            // This fires off if we've gotten a GPS time offset for our local clock that's more than 1/10 second latency
-            // Restart all the existing tracks to sync with the new clock
-
-            // if (true) {
-            // if (false) {
-            if (this.isTimeAnchorReset) {
-                this.isTimeAnchorReset = false;
-                // console.log('isTimeAnchorReset', this.time_anchor)
-
-                var point_counter = 0;
-                //console.log('_playTracks', this.points.length)
-                for (var distance = 0; distance < this.pointsByDistance.length; distance++) {
-
-                    if (this.pointsByDistance.hasOwnProperty(distance)) {
-
-                        var point = this.points[this.pointsByDistance[distance]];
-
-                        if (point && point.track_url) {
-                            // point exists and is not a person
-                            if (point.distance < this.radius) {
-                                // point is within radius
-                                if (point_counter++ < self.MAXIMUM_TRACKS_PLAYABLE) {
-                                    // point is in the top few closest tracks
-                                    //if (this.audio[point.id] && this.audio[point.id].isPlaying) {
-                                        // TODO: this is where we should space them out over the course of a second using timeouts.
-                                        // console.log('_secondTick', point.id, point_counter * 50)
-                                        // setTimeout(function() {
-                                        //     this._setMedleyId();
-                                            self._stop(point.id);
-                                            self._play(point);
-                                        // }, point_counter * 20);
-                                    // } else {
-                                    //     self._play(point);
-                                    // }
-
-
-                                // point is outside max tracks, stop it.
-                                } else {
-                                    self._stop(point.id);
-                                }
-
-                            // point is outside radius.
-                            } else  {
-                                this._deletePoint(point);
-                            }
-
-                        // point either does not exist, or is a person
-                        } else {
-                            // console.log('_playTracks: ', distance, point, this.pointsByDistance[distance])
-                        }
-                    }
-                }
-
-
-            // Latency good, just play
-            } else {
-
-
-                var point_counter = 0;
-                for (var distance = 0; distance < this.pointsByDistance.length; distance++) {
-                    if (this.pointsByDistance.hasOwnProperty(distance)) {
-
-                        var point = this.points[this.pointsByDistance[distance]];
-
-                        if (point && point.track_url) {
-                            // point exists and is not a person
-                            if (point.distance < this.radius) {
-                                // point is within radius
-                                if (point_counter++ < self.MAXIMUM_TRACKS_PLAYABLE) {
-                                    // point is in the top few closest tracks
-                                    if (this.audio[point.id] && this.audio[point.id].isPlaying) {
-                                        // point has an audio entry. do nothing! It already exists and should be playing.
-                                        // console.log('_playTracks: ', point.id, 'is already playing', this.audio[point.id])
-                                    } else {
-                                        self._play(point);
-                                    }
-
-
-                                // point is outside max tracks, stop it.
-                                } else {
-                                    self._stop(point.id);
-                                }
-
-                            // point is outside radius.
-                            } else  {
-                                this._deletePoint(point);
-                            }
-
-                        // point either does not exist, or is a person
-                        } else {
-                            // console.log('_playTracks: ', distance, point, this.pointsByDistance[distance])
-                        }
-                    }
-                }
-
-          }
-
 
 
         },
@@ -1793,12 +1582,7 @@ visualizations: bump in time to the music
             var rad_ = Math.atan2(x_, y_);
             var deg_ = 180 + rad_ * (180 / Math.PI);
             this.current_rotation = deg_;
-
-            if (this.compass_needle) {
-                var ico = this.compass_needle.getIcon();
-                ico.rotation = this.current_rotation;
-                this.compass_needle.setIcon(ico);
-            }
+            this.current_rotation = 360 - deg_;
         }
 
         
@@ -1814,14 +1598,11 @@ visualizations: bump in time to the music
     }
 
     function handleMouseDown(e) {
-        //this.oneOff({url: this.soundboard[0] });
+        e.preventDefault();
     }
 
     function handleSoundboard(e) {
         if (this.point) this.socket.emit('sing', {
-            // time_anchor: this.time_anchor,
-            // universal_time: this.universal_time,
-            // accuracyInMeters: this.accuracyInMeters,
             name: this.point.name,
             url: this.soundboard[$(e.currentTarget).data('soundid')],
             lat: this.point.lat,
@@ -1863,7 +1644,7 @@ visualizations: bump in time to the music
         // var lat = e.latLng.lat();
         // var lng = e.latLng.lng();
 
-  //       location.hash = (this.locationhash ? this.locationhash : "") + "/GPS:" + lat +','+ lng + '#';
+        // location.hash = (this.locationhash ? this.locationhash : "") + "/GPS:" + lat +','+ lng + '#';
         // this.geoLocated({ timestamp: new Date().getTime(), coords: { latitude: lat, longitude: lng }, accuracy: this.DEFAULT_ACCURACY });
         
     }

@@ -14,7 +14,7 @@ module.exports = function(Point) {
 
 
 	// /points/near?lat=44.9439&lng=-93.2834&radius=15&max=10
-	Point.near = function(lat, lng, radius, max, excludeId, medleyId, callback) {
+	Point.near = function(lat, lng, radius, max, excludeId, medleyId, people, callback) {
 		// note: radius is in meters
 
 
@@ -28,12 +28,10 @@ module.exports = function(Point) {
 		if (!latlng) var latlng = new GeoPoint({lat:lat, lng:lng});
 
 		// set some sane defaults:
-		if (!medleyId) medleyId = 1;
+        people = people || false;
+        if (!medleyId) medleyId = 1;
 		if (!lat) lat = 44.943962;
 		if (!lng) lng = -93.283302;
-		// if (!radius) radius = 100;
-		// var MAX_POINTS_PER_RADIUS = radius * 2 * Math.PI;
-		// var MAX_DOTS_RETURNED = max || 10000;
 		if (!radius) radius = 20; // in meters, the radius we're checking.
 		var radius_in_lat = radius * meters_to_degrees;
 
@@ -53,11 +51,10 @@ module.exports = function(Point) {
 		var _findPoint = function() {
 
 			// if we want to keep the db minty fresh:
-			var del_old_people = 'delete from points where name IS NOT NULL and date < (NOW() - INTERVAL 12 SECOND)';
+			var del_old_people = 'delete from points where name IS NOT NULL and date < (NOW() - INTERVAL 6 SECOND)';
 			Point.dataSource.connector.query(del_old_people, function(res) {  });
 
-            //var sql_string = buildSql(lat, lng);
-            var sql_string = buildSqlSimple(lat, lng);
+            var sql_string = buildSqlSimple(lat, lng, people);
 			Point.dataSource.connector.query(sql_string, result_callback);
 
 		}
@@ -68,13 +65,14 @@ module.exports = function(Point) {
         var result_callback = function(err, points) {
             if (err) {
                 console.log(err)
+
             } else {
-                //console.log('points length: ', points.length)
+
                 // If there are not max points returned PER MEDLEY, add a few more to points PER MEDLEY to fill out the space
                 // Pick a point one song's length away from the current point and fill it with songs, if none are too close already.
 
                 //if (points.length < MAX_POINTS_PER_RADIUS) {
-                if (points.length <= 0) {
+                if (points.length <= 0 && !people) {
                     console.log('Less than max points. Adding points.', points.length, MAX_POINTS_PER_RADIUS, MAX_POINTS_PER_RADIUS - points.length);                   
                     // Need to place tracks in song groups. Pick a random point, fill a 10m radius around it with tracks of one song. Keep going until max points are reached
                     // Loop: #songs in medley
@@ -85,7 +83,7 @@ module.exports = function(Point) {
                     var total_new_points = MAX_POINTS_PER_RADIUS - points.length
 
                     var fillRadius_sql_str = ' insert into points (track_number, song_number, lat, lng, latlng) values ' + fillRadius(lat, lng);
-                    fillRadius_sql_str = fillRadius_sql_str.substring(0, fillRadius_sql_str.length -2) + ';';
+                    fillRadius_sql_str = fillRadius_sql_str.substring(0, fillRadius_sql_str.length - 2) + ';';
                     //console.log(fillRadius_sql_str);
                     Point.dataSource.connector.query(fillRadius_sql_str, function(err, res) {  });
 
@@ -144,36 +142,9 @@ module.exports = function(Point) {
 			return Math.random() >= .5 ? 1 : -1
 		}
 
-        var buildSql = function(tlat, tlng, limit) {
-            tlat = tlat || lat;
-            tlng = tlng || lng;
-
-            // Massive sql to return all points within the radius of center in order of distance.
-            var sql_string = '';
-            sql_string += ' SELECT ';
-            sql_string += ' points.id, points.trackId, lat, lng, accuracy, date, points.name, socket_address, latlng, rgb, ';
-            sql_string += ' medleyId, songId, albumId, tracks.name as track_name, ';
-            sql_string += ' songs.name as song_name, medleys.name as medley_name, albums.name as album_name, ';
-            sql_string += " CONCAT_WS('/', '/albums', albums.name, medleys.name, songs.name, tracks.name) as track_url, ";
-            sql_string += ' ( 6371000 * acos ( cos ( radians('+ lat +') ) * cos( radians( lat ) ) * cos( radians( lng ) - radians('+ tlng +') ) + sin ( radians('+ tlat +') ) * sin( radians( lat ) ) ) ) AS distance ';
-            sql_string += ' FROM points, songs, tracks, medleys, albums ';
-            sql_string += ' WHERE 1=1 ';
-
-            if (excludeId) sql_string += ' AND points.id <> ' + excludeId;
-
-            sql_string += ' AND ( songs.medleyId = ' + medleyId + ' OR ( points.name IS NOT NULL AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) ) ) ';
-            sql_string += ' AND points.trackId = tracks.id ';
-            sql_string += ' AND tracks.songId = songs.id ';
-            sql_string += ' AND songs.medleyId = medleys.id ';
-            sql_string += ' AND medleys.albumId = albums.id ';
-            sql_string += ' HAVING distance < ' + radius;
-            sql_string += ' ORDER BY distance ';
-            if (limit) sql_string += ' LIMIT ' + limit + ' ';
-            return sql_string;
-        }
 
 
-        var buildSqlSimple = function(tlat, tlng, limit) {
+        var buildSqlSimple = function(tlat, tlng, onlyPeople, limit) {
             tlat = tlat || lat;
             tlng = tlng || lng;
 
@@ -190,7 +161,16 @@ module.exports = function(Point) {
 
             if (excludeId) sql_string += ' AND points.id <> ' + excludeId;
 
-            sql_string += ' AND  (points.name IS NULL OR points.name IS NOT NULL AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) )  '; // go get all unique tracks.
+
+            if (onlyPeople) {
+                sql_string += ' AND (points.name IS NOT NULL AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) ) ';
+
+            } else {
+                // sql_string += ' AND  (points.name IS NULL OR points.name IS NOT NULL AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) )  '; // go get all points, including people.
+                sql_string += ' AND points.name IS NULL '; // go get all unique points that are not people.
+            }
+
+
             // sql_string += ' AND points.trackId = tracks.id ';
             // sql_string += ' AND tracks.songId = songs.id ';
             // sql_string += ' AND songs.medleyId = medleys.id ';
@@ -224,7 +204,8 @@ module.exports = function(Point) {
                 { arg: 'radius', type: 'number' },
                 { arg: 'max', type: 'number' },
                 { arg: 'excludeId', type: 'number' },
-                { arg: 'medleyId', type: 'number' }
+                { arg: 'medleyId', type: 'number' },
+                { arg: 'people', type: 'boolean' }
             ],
             returns: [
                 { root: true }
