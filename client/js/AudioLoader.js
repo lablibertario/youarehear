@@ -2,14 +2,15 @@
 
 function AudioLoader(context, point, callback) {
 
-	this.context = context;
-	this.onload = callback;
-	this.point = point;
+    this.context = context;
+    this.onload = callback;
+    this.point = point;
 }
 
 AudioLoader.prototype.loadBuffer = function(point) {
-	// Load buffer asynchronously
-	var request = new XMLHttpRequest();
+    // Load buffer asynchronously
+    var request = new XMLHttpRequest();
+    // console.log(point.id, point.track_url, point)
     if (point.track_url) {
         request.open("GET", point.track_url, true);
         request.responseType = "arraybuffer";
@@ -49,6 +50,6 @@ AudioLoader.prototype.loadBuffer = function(point) {
 }
 
 AudioLoader.prototype.load = function() {
-	this.loadBuffer(this.point);
+    this.loadBuffer(this.point);
 }
 

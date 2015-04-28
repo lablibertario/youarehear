@@ -50,7 +50,7 @@ var all_sockets = [];
 
 
 io.sockets.on('connection', function(socket) {
-	socket.send({ "server_time": Date.now() })
+	//socket.send({ "server_time": Date.now() })
 
 	socket.on('join', function(room) {
 		socket.join(room);
@@ -61,7 +61,7 @@ io.sockets.on('connection', function(socket) {
 	});
 
     socket.on('ping', function(data) {
-        data.server_time = Date.now();
+        // data.server_time = Date.now();
         io.to(data.name).emit('pong', data)
     });
 
