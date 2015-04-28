@@ -2,11 +2,16 @@
 
 TODO:
 
-Allow for a toggle between visualizations and top-down map.
+Here are the beta comments from yesterday-
+-What do dots represent? (Legend?)
+-Sound board icons
+-Start button should light up when pushed
+-Soundboard buttons should light up when pushed
+-Problems clearing tracks
 
-Don't have all tracks restart at once every second tick update for GPS time offset fixes, space them out a bit so it's not as obvious -- schedule them every 100mx
 
-iPhone crashes! Clear buffers? -- POSSIBLY FIXED: see _playTracks, it involved looping through by distance.
+Don't have all tracks restart at once for GPS time offset fixes, space them out a bit so it's not as obvious -- schedule them every 10ms
+
 
 facebook & twitter default tweets (with GPS location? Then we need a 'go to my location' button too )
 social share graphics
@@ -14,26 +19,25 @@ social share graphics
 SECURITY on POST: ensure data integrity? Check on edit to make sure edit id is not a track and is a person.
 
 
+start pre-loading GPS tracks, but don't play until button press.
 
 
 
-credits page:
+info page:
 Richard bio -- link to 3232
 Stefon bio -- link to bionik
 Volunteer thanks
+Legend
 Note: save as a home page app for full-screen!
 Issues: Has to be outside for GPS to work properly! Give GPS 60 seconds to warm up after starting for most accurate location.
 
 stress-test and load-test connections.
 
-start pre-loading GPS tracks, but don't play until button press.
 
 
 
 
 NICE TO HAVE
-Open Source / GitHub
-fade in markers / visualization dots when loaded
 visualizations: bump in time to the music
 
 
@@ -714,7 +718,7 @@ visualizations: bump in time to the music
                 this.oneOff({ url: this.stingers[Math.floor(this.stingers.length * Math.random())] });
                 this._stopAll();
                 this.audio = [];
-                //this.audio_buffer = [];
+                this.audio_buffer = [];
 
                 for (var i in this.points) {
                     if (this.points.hasOwnProperty(i)) {
@@ -751,13 +755,13 @@ visualizations: bump in time to the music
 
                 if (typeof this.time_anchor != 'undefined') {
                     if (Math.abs(nextTimeAnchor - this.time_anchor) > 200) { // only reset if it's off by more than 1/5 of a second. Includes ping time
-                        console.log('setTimeAnchor', nextTimeAnchor, t)
+                        // console.log('setTimeAnchor', nextTimeAnchor, t)
                         this.isTimeAnchorReset = true;
                         this.time_anchor = nextTimeAnchor;
                     }
 
                 } else { // first time through, just set it.
-                    console.log('setTimeAnchor 1', nextTimeAnchor, t)
+                    // console.log('setTimeAnchor 1', nextTimeAnchor, t)
                     this.isTimeAnchorReset = true;
                     this.time_anchor = nextTimeAnchor;
                 }
@@ -1589,7 +1593,7 @@ visualizations: bump in time to the music
             // if (false) {
             if (this.isTimeAnchorReset) {
                 this.isTimeAnchorReset = false;
-                console.log('isTimeAnchorReset', this.time_anchor)
+                // console.log('isTimeAnchorReset', this.time_anchor)
 
                 var point_counter = 0;
                 //console.log('_playTracks', this.points.length)
