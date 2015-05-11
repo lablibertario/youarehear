@@ -51,7 +51,7 @@ module.exports = function(Point) {
 		var _findPoint = function() {
 
 			// if we want to keep the db minty fresh:
-			var del_old_people = 'delete from points where name IS NOT NULL and date < (NOW() - INTERVAL 6 SECOND)';
+			var del_old_people = 'delete from points where name IS NOT NULL and name <> "" and date < (NOW() - INTERVAL 6 SECOND)';
 			Point.dataSource.connector.query(del_old_people, function(res) {  });
 
             var sql_string = buildSqlSimple(lat, lng, people);
@@ -163,11 +163,11 @@ module.exports = function(Point) {
 
 
             if (onlyPeople) {
-                sql_string += ' AND (points.name IS NOT NULL AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) ) ';
+                sql_string += ' AND (points.name IS NOT NULL and points.name <> "" AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) ) ';
 
             } else {
                 // sql_string += ' AND  (points.name IS NULL OR points.name IS NOT NULL AND points.date > (NOW() - INTERVAL ' + geolocationSpeed * 10 + ' SECOND) )  '; // go get all points, including people.
-                sql_string += ' AND points.name IS NULL '; // go get all unique points that are not people.
+                sql_string += ' AND points.name IS NULL OR points.name = "" '; // go get all unique points that are not people.
             }
 
 

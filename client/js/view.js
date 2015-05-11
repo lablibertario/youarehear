@@ -2,6 +2,19 @@
 
 TODO:
 
+ON DESKTOP: tell about wasd/arrow key movement
+
+ON GPS FAIL: pop up a window with instructions to turn on GPS/Location Services in settings (Settings/Privacy in iOs) and make sure browser has access to use it
+
+Add GPS coords to sharing, when coming in on coords allow a button for switching to live GPS mode.
+
+Admin system for moving tracks around with drag and drop
+
+
+if !isMobile on start show wasd controls
+if !navigator.watchPosition -- prompt to turn on GPS/Location services (both iOS and Android)
+
+
 Here are the beta comments from yesterday-
 -What do dots represent? (Legend?)
 -Sound board icons
@@ -117,22 +130,29 @@ visualizations: bump in time to the music
             this.soundboard             = [];
             this.stingers               = [];
 
+            this.markerIsMoving         = false;
 
             this.sockets                = [];
 
+            this.isAdmin = false;
 
-            this.useGPS                 = true; // set this to true to use current GPS location; if there isn't one, then use initial_latlng
+
+            this.useGPS                 = false; // set this to true to use current GPS location; if there isn't one, then use initial_latlng
             // this.useGPS                 = false; // set this to false to turn off all GPS processing and default to initial_latlng
-            this.initial_latlng         = [44.978584, -93.256087]; // Chicago Mall
+            // this.initial_latlng         = [44.978584, -93.256087]; // Chicago Mall
             this.initial_latlng         = [44.972208, -93.275697]; // Peavey Plaza
+            // this.initial_latlng         = [44.942986, -93.257077]; // Powderhorn
+            this.initial_latlng         = [44.97220920431632, -93.27569738030434]; // ???
 
             this.geolocateErrorCounter  = 0;
 
             // check location hash for a search parameter.
             var ls = location.hash;
-
             if (ls) {
                 ls = ls.substring(1, ls.length);
+                if (ls.indexOf('__admin_') >= 0) {
+                    this.isAdmin = true;
+                }
                 if (ls.indexOf('GPS:') > 0) {
                     var coords = ls.substring(ls.indexOf('GPS:') + 4, ls.indexOf('#'));
                     coords = coords.split(',');
@@ -167,7 +187,7 @@ visualizations: bump in time to the music
 
             this.visualizations         = [];
 
-            this.latlngbounds           = new google.maps.LatLngBounds(); // This lets us zoom the map to fit our markers
+            // this.latlngbounds           = new google.maps.LatLngBounds(); // This lets us zoom the map to fit our markers
 
             google.maps.event.addDomListener(window, 'load', $.proxy(this.init, this));
 
@@ -207,6 +227,7 @@ visualizations: bump in time to the music
 
             $('#loading').height(this.vh);
 
+            self.geoLocate();
             $.get('/api/v1/albums/1/list', function(album) {
 
                 self.$visualizations    = $('#visualizations');
@@ -218,6 +239,7 @@ visualizations: bump in time to the music
                 self._initSockets();
                 self._initOneoffs();
 
+                // self.geoLocate();
             });
 
 
@@ -227,6 +249,7 @@ visualizations: bump in time to the music
             this.$window.on('resize', $.proxy(handleResize, this));
             this.$window.on('mousemove', $.proxy(handleMousemove, this));
             this.$window.on('mousedown', $.proxy(handleMouseDown, this));
+            this.$window.on('rightclick', $.proxy(handleContextMenu, this));
             this.$window.on('keydown', $.proxy(handleKeyDown, this));            
             window.addEventListener('deviceorientation', $.proxy(this._orientationChange, this), false);
         },
@@ -241,10 +264,13 @@ visualizations: bump in time to the music
             var self = this;
 
             $('#loading button').click(function() { self.startButtonClick(); });
+            
             $('#loading #init').hide();
 
             var start = $('#loading #splash button');
             start.css({ 'margin-top': this.vh / 2 - start.height()/2 });
+
+            if (!this.isMobile) $('#keyboard_info').show()
 
             $('#loading #splash').show();
 
@@ -259,7 +285,7 @@ visualizations: bump in time to the music
             // initial stinger
             self.oneOff({url: '/albums/Northern Spark/stingers/01.mp3', callback: function() {
 
-                self.geoLocate();
+                // self.geoLocate();
 
                 self._secondTick();
                 self._getTime();
@@ -337,7 +363,8 @@ visualizations: bump in time to the music
             this.map.setMapTypeId('custom_style');
 
             google.maps.event.addListener(this.map, 'click', $.proxy(!self.isMobile ? handleMapClick : handleMobileMapClick, this));
-            
+            google.maps.event.addListener(this.map, 'mouseup', $.proxy(handleMapMouseup, this));
+            google.maps.event.addListener(this.map, 'drag', $.proxy(handleMapDrag, this));
 
         },
 
@@ -375,8 +402,8 @@ visualizations: bump in time to the music
             var lat = point.lat;
             var lng = point.lng;
             var glatlng = new google.maps.LatLng(point.lat,point.lng);
-            this.latlngbounds.extend(glatlng);
-
+            // this.latlngbounds.extend(glatlng);
+            
         
             var rgb = self._getRGB(point);
 
@@ -385,11 +412,12 @@ visualizations: bump in time to the music
                 position: glatlng,
                 title: point.track_url,
                 optimized: false,
-                clickable: false,
-                //zIndex: 3,
+                clickable: this.isAdmin,
+                pointId: point.id,
+                // zIndex: 3,
                 icon: {
                     path: google.maps.SymbolPath.CIRCLE,
-                    scale: 10,
+                    scale: 12,
                     fillColor: rgb,
                     fillOpacity: 1,
                     strokeOpacity: 0,
@@ -400,6 +428,19 @@ visualizations: bump in time to the music
             });
 
             point.marker = marker_icon;
+
+            if (this.isAdmin) {
+                google.maps.event.addListener(marker_icon, 'mousedown', function(e) {
+                    self.markerMoving = marker_icon;
+                    self.markerIsMoving = true;
+                });
+ 
+                 google.maps.event.addListener(marker_icon, 'rightclick', function(e) {
+                    self.markerMoving = marker_icon;
+                    self.markerIsMoving = true;
+                });
+            }
+
             
         },
 
@@ -814,8 +855,6 @@ visualizations: bump in time to the music
 
             } else {
                 console.log('_createAudioBufferNode: Point missing: ', pointId, point.track_url)
-                console.log(this.audio_buffer)
-                console.log(this.points)
             }
 
         },
@@ -1203,6 +1242,21 @@ visualizations: bump in time to the music
             })
         },
 
+        errorGeolocating: function() {
+            console.log('please turn on GPS and location services', this.isMobile, navigator)
+            $('#gps_info').show()
+
+            if (this.isMobile) {
+                if (this.isIOS) $('#gps_info').prop('href', 'https://support.google.com/coordinate/answer/2800543?hl=en'); // iOS
+                if (this.isAndroid) $('#gps_info').prop('href', 'https://support.google.com/coordinate/answer/2569281?hl=en&ref_topic=3056956'); // Android
+
+            } else {
+                $('#gps_info').prop('href', 'https://support.google.com/chrome/answer/142065?hl=en'); // Chrome
+            }
+
+
+        },
+
 
         geoLocate: function () {
             var self = this;
@@ -1221,6 +1275,7 @@ visualizations: bump in time to the music
                         } else {
                             // give up, geolocation is broken.
                             console.log('Giving up on geolocation, too many errors.');
+                            self.errorGeolocating();
                             self.isLocated = true;
                             // self.setAudioPosition();
                             self.setGPSLocation({ timestamp: new Date().getTime(), coords: {latitude: self.lat, longitude: self.lng, accuracy: self.DEFAULT_ACCURACY} });
@@ -1231,6 +1286,7 @@ visualizations: bump in time to the music
             } else { // fake it, probably on desktop anyway
                 this.isLocated = true;
                 console.log('No navigator.geolocation.', this.lat, this.lng);
+                self.errorGeolocating();
                 this.setGPSLocation({ timestamp: new Date().getTime(), coords: {latitude: this.lat, longitude: this.lng, accuracy: this.DEFAULT_ACCURACY} });
             }
 
@@ -1283,7 +1339,9 @@ visualizations: bump in time to the music
             var start = $('#loading #splash button');
             start.css({ 'margin-top': this.vh / 2 - start.height()/2 });
             $('#loading #splash').height(this.vh);
+            $('#loading #splash button').css({ "left": (this.vw / 2) - ($('#loading #splash button').width() / 2) });
 
+            $('#loading #splash #keyboard_info').css({ "left": (this.vw / 2) - ($('#loading #splash #keyboard_info').width() / 2) });
 
             // rotate the map so it's compass-stable
             var t = 'translate3d('+ this.diagonal_diff_x +'px, '+ this.diagonal_diff_y +'px, 0px) rotateZ(-' + this.current_rotation + 'deg) ';
@@ -1560,36 +1618,39 @@ visualizations: bump in time to the music
 
 
     function handleMousemove(e) {
-        this.clientX = e.clientX;
-        this.clientY = e.clientY;
+        if (!this.isAdmin) {
+
+            this.clientX = e.clientX;
+            this.clientY = e.clientY;
 
 
-        var screen_center_h = this.vh / 2;
-        var screen_center_w = this.vw / 2;
+            var screen_center_h = this.vh / 2;
+            var screen_center_w = this.vw / 2;
 
 
-        if (this.clientX < screen_center_w) this.clientX = -(screen_center_w - this.clientX)
-            else this.clientX = this.clientX - screen_center_w;
+            if (this.clientX < screen_center_w) this.clientX = -(screen_center_w - this.clientX)
+                else this.clientX = this.clientX - screen_center_w;
 
-        if (this.clientY < screen_center_h) this.clientY = screen_center_h - this.clientY
-            else this.clientY = -(this.clientY - screen_center_h);
+            if (this.clientY < screen_center_h) this.clientY = screen_center_h - this.clientY
+                else this.clientY = -(this.clientY - screen_center_h);
 
 
-        // on desktop, use mouse cursor to determine rotation
-        if (!this.isMobile) {
-            var x_ = 0 - this.clientX;
-            var y_ = 0 - this.clientY;
-            var rad_ = Math.atan2(x_, y_);
-            var deg_ = 180 + rad_ * (180 / Math.PI);
-            this.current_rotation = deg_;
-            this.current_rotation = 360 - deg_;
+            // on desktop, use mouse cursor to determine rotation
+            if (!this.isMobile) {
+                var x_ = 0 - this.clientX;
+                var y_ = 0 - this.clientY;
+                var rad_ = Math.atan2(x_, y_);
+                var deg_ = 180 + rad_ * (180 / Math.PI);
+                this.current_rotation = deg_;
+                this.current_rotation = 360 - deg_;
+            }
+
+            
+            var dmod = this.vh / 180;
+            var pitch = this.clientY / dmod;
+
+            this._orientationChange({heading: this.current_rotation, pitch: pitch});
         }
-
-        
-        var dmod = this.vh / 180;
-        var pitch = this.clientY / dmod;
-
-        this._orientationChange({heading: this.current_rotation, pitch: pitch});
 
     }
 
@@ -1611,12 +1672,15 @@ visualizations: bump in time to the music
     }
 
     function handleKeyDown(e) {
+
+        e.keyCode = e.keyCode || e.which;
+
         if (this.isLocated == true) {
 
             var lat = parseFloat(this.lat);
             var lng = parseFloat(this.lng);
 
-            var deg = this.current_rotation;
+            var deg = this.current_rotation || 10;
 
             var isMove = false;
 
@@ -1641,20 +1705,111 @@ visualizations: bump in time to the music
     }
 
     function handleMapClick(e) {
-        // var lat = e.latLng.lat();
-        // var lng = e.latLng.lng();
+        var lat = e.latLng.lat();
+        var lng = e.latLng.lng();
+        console.log(lat + ', ' + lng)
+
+
+        // if (this.isAdmin) {
+        //     this.setGPSLocation({ timestamp: new Date().getTime(), coords: { latitude: lat, longitude: lng }, accuracy: this.DEFAULT_ACCURACY });
+        // }
 
         // location.hash = (this.locationhash ? this.locationhash : "") + "/GPS:" + lat +','+ lng + '#';
         // this.geoLocated({ timestamp: new Date().getTime(), coords: { latitude: lat, longitude: lng }, accuracy: this.DEFAULT_ACCURACY });
         
     }
 
-    function handleMobileMapClick() {
-        
+    function handleMapDrag(e) {
+        console.log(e)
+    }
+
+
+    function handleMapMouseup(e) {
+
+        if (this.isAdmin) {
+            var lat = e.latLng.lat();
+            var lng = e.latLng.lng();
+
+            var self = this;
+            var posturl = '/api/v1/points';
+
+
+            if (this.markerIsMoving) {
+
+                var upd_posturl = posturl +  '/' + this.markerMoving.pointId;
+
+                var p = this.points[this.markerMoving.pointId];
+
+                var point = {
+                    "id":p.id,
+                    "lat":lat,
+                    "lng":lng,
+                    "accuracy":null,
+                    "date":p.date,
+                    "socket_address":null,
+                    "name":null,
+                    "trackId":null,
+                    "latlng":{"lat":lat,"lng":lng},
+                    "song_number":p.song_number,
+                    "track_number":p.track_number
+                }
+
+                var marker = this.markerMoving;
+                marker.setPosition(e.latLng);
+
+                $.ajax({
+                    type: 'PUT',
+                    url: upd_posturl,
+                    data: point,
+                    success: function (e) {    },
+                    // if it 404s try just adding the point again, it may have gotten deleted
+                    error: function(e) { console.log('NOT updated', e) }
+                });
+
+                this.markerIsMoving = false;
+                
+
+            }
+               
+        }
+
+    }
+    function handleContextMenu(e) {
+        console.log('rightclick')
+
+        if (this.isAdmin) {
+ 
+            var self = this;
+            var posturl = '/api/v1/points';
+
+
+            if (this.markerIsMoving) {
+
+                var upd_posturl = posturl +  '/' + this.markerMoving.pointId;
+
+                $.ajax({
+                    type: 'DELETE',
+                    url: upd_posturl,
+                    success: function (e) {    },
+                    // if it 404s try just adding the point again, it may have gotten deleted
+                    error: function(e) { console.log('NOT updated', e) }
+                });
+
+                this.markerIsMoving = false;
+                
+
+            }
+               
+        }
 
     }
 
 
+
+    function handleMobileMapClick() {
+        
+
+    }
 
         
     

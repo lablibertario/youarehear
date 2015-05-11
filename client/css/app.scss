@@ -20,6 +20,8 @@ body { background-color: #000; overflow: hidden; font-family: $font_family; }
 	background-color: #000;
 	overflow: hidden;
 
+    a { color: white; }
+
 	#loading {
 		text-align: center;
 		width: 100%;
@@ -46,6 +48,7 @@ body { background-color: #000; overflow: hidden; font-family: $font_family; }
 
 
 			button {
+                position: absolute; top: 0; left: 40%;
 				display: block; margin-left: auto; margin-right: auto;
 				@include border-radius(50%);
 				height: 10em; width: 10em; text-align: center; line-height: 10em;
@@ -129,6 +132,23 @@ body { background-color: #000; overflow: hidden; font-family: $font_family; }
 		pointer-events: none;
 		@include transform(translateZ(10000px));
 	}
+
+    #share {
+        position: absolute;
+        color: white; top: 0; left: 0;
+    }
+
+    #keyboard_info {
+        position: absolute; bottom: 0; left: 0;
+        display: block; width: 300px;
+        margin: 20px auto;
+
+    }
+
+    #gps_info {
+        display: block; width: 300px;
+        margin: 20px auto;
+    }
 }
 
 
