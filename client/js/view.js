@@ -134,13 +134,13 @@ visualizations: bump in time to the music
 
             this.sockets                = [];
 
-            this.isAdmin = false;
+            this.isAdmin = true;
 
 
             this.useGPS                 = false; // set this to true to use current GPS location; if there isn't one, then use initial_latlng
             // this.useGPS                 = false; // set this to false to turn off all GPS processing and default to initial_latlng
-            // this.initial_latlng         = [44.978584, -93.256087]; // Chicago Mall
-            this.initial_latlng         = [44.972208, -93.275697]; // Peavey Plaza
+            this.initial_latlng         = [44.978584, -93.256087]; // Chicago Mall
+            // this.initial_latlng         = [44.972208, -93.275697]; // Peavey Plaza
             // this.initial_latlng         = [44.942986, -93.257077]; // Powderhorn
             this.initial_latlng         = [44.97220920431632, -93.27569738030434]; // ???
 
@@ -616,12 +616,15 @@ visualizations: bump in time to the music
             var self = this;
 
             // preload soundboard
-            self.soundboard[0] = '/albums/Northern Spark/soundboard/1-COWBELL.mp3';
-            self.soundboard[1] = '/albums/Northern Spark/soundboard/2-CLAP.mp3';
+            self.soundboard[6] = '/albums/Northern Spark/soundboard/1-COWBELL.mp3';
+            self.soundboard[7] = '/albums/Northern Spark/soundboard/2-CLAP.mp3';
             self.soundboard[2] = '/albums/Northern Spark/soundboard/3-WOW.mp3';
-            self.soundboard[3] = '/albums/Northern Spark/soundboard/4-CYMBAL.mp3';
+            self.soundboard[8] = '/albums/Northern Spark/soundboard/4-CYMBAL.mp3';
             self.soundboard[4] = '/albums/Northern Spark/soundboard/5-SFX.mp3';
             self.soundboard[5] = '/albums/Northern Spark/soundboard/6-DJ SIREN.mp3';
+            self.soundboard[1] = '/albums/Northern Spark/soundboard/Sound board new 4.mp3';
+            self.soundboard[2] = '/albums/Northern Spark/soundboard/Sound board new 5.mp3';
+            self.soundboard[3] = '/albums/Northern Spark/soundboard/Sound board new 6.mp3';
 
             for (var i in self.soundboard) {
                 // console.log(self.soundboard[i])
